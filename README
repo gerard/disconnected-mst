@@ -1,0 +1,18 @@
+El contingut ve tot generat, així que no es necessari executar 'make'.
+No obstant, si vol tornarse a compilar/generar el contigut, pot ferse un
+'make clean'.
+També hi ha un binari en el directori bin/
+
+Els paquets necessaris per la generació en Gentoo Linux son els seguents:
+*  dev-tex/listings : 			1.1 (0)
+*  dev-lang/icc :				8.0.055 (8)
+*  app-text/tetex :				2.0.2-r3 (0)
+*  app-text/enscript :			1.6.3-r1 (0)
+
+Els directoris s'expliquen a continuació:
+bin/		=>	Binari del Programa
+scripts/	=>	Scripts que crida el MakeFile
+src/		=>	Codi Font
+srcdoc/		=>	Codi Font colorejat, format PostScript
+tex/		=>	Memoria, directori d'execució de LaTeX
+

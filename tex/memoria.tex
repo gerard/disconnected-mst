@@ -1,0 +1,206 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage[latin1]{inputenc}
+\usepackage[catalan]{babel}
+\usepackage{a4wide}
+\usepackage[colorlinks=true]{hyperref}
+\usepackage{listings}
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\pagestyle{headings}
+\markright{Secció -- \thesection}
+
+\begin{document}
+
+\lstset{language=C++}			% Llenguatge per la identació correcta
+\title{MST mínim sobre Grafs no Connexes}
+\author{Gerard Lledó Vives}
+
+\maketitle
+\tableofcontents
+\newpage
+\hyphenation{cor-res-pon-den-ci-a}
+
+\section{Introducció}
+L'enunciat del problema plantejava trobar el mínim MST dins de les components connexes de un graf no 
+connex, no dirigit i ponderat.\\
+El problema del \href{http://www.comp.nus.edu.sg/~stevenha/programming/prog_graph4.html}{Arbre de mínima
+expansió} o MST es un dels més coneguts problemes sobre grafs. Com es pot observar, existeixen dos
+algorismes clàssics que resolen aquest problema: el algorisme de Prim i el algorisme de Kruskal.\\
+No obstant el nostre problema transcendeix molt més allà. Conegudes les tècniques per a calcular
+el MST donat un graf, ens queda optimitzar el seu càlcul a través de les distintes components.
+Per reduir el temps d'execució hi ha que aconseguir obtenir una cota (o cotes, si es possible) que
+reduïsca el costós càlcul del MST. Per altra banda, tampoc hi ha que oblidar l'eficient ús de la
+memòria, un recurs limitat i que per a les talles que pretenem manejar, no es pot obviar.
+
+\section{El llenguatge de programació}
+Encara que C es el llenguatge d'alt nivell que més s'aproxima a un llenguatge de baix nivell i que en
+teoria hauria d'augmentar el rendiment del codi; s'ha optat per C++. Les raons han sigut mes bé
+pragmàtiques, ja que ha agilitzat la codificació del algorisme (gran part d'ell s'implementa en
+pràctiques de EDA), entre altres raons de comoditat. L'orientació a objectes i altres
+característiques com la sobrecàrrega de operadors, li donen un punt més de de cara a la eficiència
+de la codificació. No obstant i això, s'han emprat prou elements del llenguatge C, com es vorà mes
+endavant.\\
+
+\section{Plataforma de desenvolupament}
+\subsection{El compilador}
+El compilador estàndard de GNU/Linux per a C++ es el g++ que forma part de la GNU Compiler Collection (GCC).
+Inicialment, s'emprà la versió 3.3.2-r5 d'aquesta colecció de compiladors.\\
+No obstant, el fet de que el programa haguera d'executar-se en una màquina Intel x86 afavoria el fet
+de gastar el ICC (Intel C++ Compiler) que finalment donaria resultats més satisfactoris, usant una
+optimització per a PIII. En concret la versió emprada ha sigut la 8.0.055 segons la numeració seguida per
+Gentoo Linux.\\
+Aquest compilador, encara que no es Software Lliure, si que es gratuït. En una distribució Gentoo Linux,
+tan sols hi ha que executar la següent comanda com a root per a instalar-lo en la màquina:\\
+\texttt{\# emerge icc}\\
+Hi ha que tindre en compte, que si es treballa amb glibc 2.3, s'haura de instalar una versió del compilador
+igual o superior a la 8.x. Per a aconseguir la llicencia d'ús no comercial hi ha que dirigir-se
+a la següent URL:\\
+\href{http://www.intel.com/software/products/compilers/clin/noncom.htm}
+     {http://www.intel.com/software/products/compilers/clin/noncom.htm}\\
+i situar el fitxer .lic en la següent ruta:\\
+/opt/intel/compiler80/licenses/\\
+El procés de instalació pot diferir en altres distribucions, si bé RedHat deu tindre suficient suport.
+Per altra banda, debian pot ser que incloga un .deb en els repositoris non-free.\\\\
+Seguint amb el nostre programa, aplicaríem els següents paràmetres de compilació per una optimització
+satisfactòria:\\
+\texttt{FLAGS=-fast -static -Ob2 -march=pentiumiii -xK}\\
+Hi ha que remarcar que el flag -fast, activa, entre altres, els flags -static, -ipo i -O3.
+
+\subsection{Make}
+Per a treballar amb molts fitxers, es prou recomanable la automatització de la compilació. Si bé tot açò
+es possible fent ús d'un script, la ferramenta \href{http://www.gnu.org/software/make/make.html}{make}
+es ideal per als nostres propòsits.\\
+La organització del codi, com ja hem vist es senzilla, s'usen 5 classes de distinta complexitat i que
+es compilen com a mòduls. Més tard, amb un programa principal es linken per a crear un executable.
+La versió emprada es la 3.80. El fitxer Makefile es pot veure més avall\\ %agregar link
+
+
+\subsection{Altres ferramentes}
+Tot el desenvolupament del codi, s'ha fet sota un sistema linux; en part en els laboratoris del DSIC,
+encara que majoritàriament, al meu ordinador personal on tinc instalat \href{http://www.gentoo.org/}{
+Gentoo Linux} amb un kernel 2.6.5 (distribució a la qual es refereixen les versions del programari
+nomenat). Per escriure el codi es va usar \href{http://www.vim.org/}{vim} 6.2-r8 i també es va fer un
+ús intensiu del depurador de gnu, \href{http://sources.redhat.com/gdb/}{gdb} i una gui:
+\href{http://www.gnu.org/software/ddd}{ddd}. Per la redacció d'aquest document s'usa 
+\href{http://kile.sourceforge.net/}{Kile}, un entorn integrat de treball en \LaTeX\, amb pdflatex
+per la generació de un format de presentació.\\
+La coloració adequada del codi font en \LaTeX\ es va fer usant 
+\href{http://www.atscire.de/products/listings}{listings} i el ps proporcionats, amb
+\href{http://www.gnu.org/software/enscript/enscript.html}{enscript}.
+
+\section{Implementació}
+\subsection{Les Arestes}
+La implementació de les arestes, es la més simple de totes les estructures, i s'aproxima a un `struct'
+clàssic de C. Tan sols es sobrecarreguen els operadors `menor que', `major que' i `igual' per a agilitzar
+i clarificar el codi font, a més de un mètode que tan sols estableix el contingut dels valors de la aresta.
+Al contrari que el codi facilitat en pràctiques, el creador no té paràmetres i òbviament crea un objecte
+amb informació invàlida, que el mètode inserir replena adequadament. Açò, com es veu en la funció llegir,
+agilitza la reserva de memòria.\\
+\begin{scriptsize}
+\lstinputlisting{../src/ArestaClass.cc}
+\end{scriptsize}
+
+
+\subsection{La taula Hash}
+La taula Hash ha sofert prou modificacions respecte a la implementada originalment en pràctiques. Si bé
+era impossible desfer-se de les cadenes de text que penalitzaven l'ús de memòria; s'han eliminat estructures,
+com el vector per a realitzar la funció inversa al hashing. També s'ha canviat la funció Hash per la que empra
+el popular sistema de fitxers *nix, EXT3. A més a més, es va eliminar el strcpy per fer una copia caràcter
+a caràcter, que pareixia obtindre un rendiment més adequat. 
+Per altra banda, com que l'enunciat limitava el nombre de nodes, el espai reservat als nodes de informació
+associats, es va declarar estàticament, per les mateixes raons que abans. Les cadenes també es guarden en una
+memòria reservada prèviament per disminuir el nombre de crides al sistema operatiu.\\
+\begin{scriptsize}
+\lstinputlisting{../src/Hash.cc}
+\end{scriptsize}
+
+\subsection{El MFSet}
+El mfset original també ha sigut fortament modificat. Per començar, el mfset té compressió de camins i unió
+per rang. Açò explica l'existència del vector mfsPC. Per altra banda, en realitat hi han dos mfsets, si es
+representen conjunts es perquè comparteixen molta informació i així ens permeten estalviar memòria. Els
+altres dos vectors, aprofiten per al càlcul del número de nodes de les components connexes.\\
+Seguint amb l'anàlisi, s'aprecia, com a clara conseqüència del doble mfset que hem construït, que hi han dos
+operacions find/merge. Com ja hem dit, estem mantenint de forma lògica dos mfSets:\\
+El primer mfSet es el que emmagatzema la informació sobre el graf en general: no es més que una eina per
+mantindre constància de quines son les components connexes i del nombre de nodes/arestes de cadascuna
+d'aquestes.\\
+En canvi el segon mfset manté la informació de connexió dels subgrafs resultat de la aplicació del MST, i
+per tant no ha de conèixer la connexió del graf general. A més a més, una operació de merge ens tornarà
+\texttt{true} o \texttt{false} per a informar-nos si la connexió que pretenem crea un cicle en la component
+estudiada o no. Esta informació es la que emprarà el algorisme de Kruskal per evitar la formació de cicles.\\
+\begin{scriptsize}
+\texttt{\lstinputlisting{../src/mfSetClass.cc}}
+\end{scriptsize}
+
+\subsection{Els minHeap}
+Com que disposem de un nombre indeterminat de components connexes, disposem de un nombre indeterminat de
+heaps. Podria implementar-se usant un sol heap o bé usant el vector ordenat que extractMinHeap deixa a la cua
+del vector i comprovant que pertanyia a la component estudiada; però òbviament, no s'extreia un rendiment
+excessiu. Finalment es va optar per implementar un vector de punters a minHeap.\\
+A este respecte, el mètode representants de la classe graf té molt que dir, ja que es l'encarregada de
+repartir entre els distints heaps les arestes. Canviant el mètode de un sol heap des de el vector de punters a
+heap es va reduir el temps d'execució a poc menys del 50\%. En el que respecta a la classe Heap propiament
+dita, les modificacions respecte a un heap clàssic no han sigut excessives.\\
+\begin{scriptsize}
+\texttt{\lstinputlisting{../src/HeapClass.cc}}
+\end{scriptsize}
+
+\subsection{El Graf}
+La classe graf es una de les més abstractes del codi implementat i la única que interactúa amb el programa
+principal. Tres els mètodes significatius, encara que en disposa de més, no son més que el creador i uns
+quants métodes per la consulta de resultats.\\
+
+\subsubsection{El mètode llegir}
+El primer es el mètode llegir, aquest es l'encarregat de "parsejar" les línies de text i interpretar el
+seu significat. A cada línia de la entrada estàndard li atorga un punter a un objecte de la classe aresta,
+que ja hem vist. Deixant d'una banda el pes, que s'extrau fàcilment; per obtenir els identificadors de
+node (en necessitem dos per definir una aresta), interactúa amb la classe Hash que li'ls proporciona, ja
+siga amb un que ja existeix o creant una nova entrada en la taula Hash.\\
+Aquest mètode a més, té una lectura caràcter a caràcter, que dificulta el enteniment del codi, però que
+proporcionava un petit augment del rendiment en la màquina local, si be en l'oracle no va extreure
+resultats significativament millors.
+\begin{scriptsize}
+\lstinputlisting[firstline=35, lastline=101]{../src/GrafClass.cc}
+\end{scriptsize}
+
+\subsubsection{El mètode representants}
+El mètode representants, a la seua vegada, tracta de facilitar la feina al algorisme de Kruskal, reduint
+el nombre de modificacions necessàries per a aplicar-lo a distintes components ("subgrafs"). La informació
+que obtindrem es quantiosa. Parteix de la base del mfSet general per construir la estructura principal
+de emmagatzematge de arestes, es a dir, el vector de heaps. Tot açò es pot seguir més fàcilment llegint
+el codi en qüestió:\\
+\begin{scriptsize}
+\texttt{\lstinputlisting[firstline=108, lastline=155]{../src/GrafClass.cc}}
+\end{scriptsize}
+
+\subsubsection{El mètode KruskalM}
+La modificació del algorisme de Kruskal que hem codificat té lleugeres diferencies amb la implementació
+clàssica. Abans de analitzar cada component una a una, consultem el mfSet, per a que ens proporcione la
+component amb menor pes total. Una vegada analitzada esta component, usarem el resultat com una condició
+més en el bucle del algorisme de Kruskal. Es a dir, si en el càlcul del MST, aquest excedeix el pes de
+la cota, abortarem el bucle principal. Per suposat, en el cas de que obtinguérem un millor resultat,
+actualitzaríem degudament les variables. Una vegada acabat l'anàlisi de les diferents components i el
+menor pes, només ens quedaria extraure la resta de paràmetres associats a la component corresponent, de la
+que tenim l'índex emmagatzemat en min\_i. Així només tindrem que accedir al mfSet amb el element adequat:
+(vRep[min\_i]).\\
+\begin{scriptsize}
+\texttt{\lstinputlisting[firstline=162, lastline=208]{../src/GrafClass.cc}}
+\end{scriptsize}
+
+\subsection{El Programa Principal}
+El programa principal no te excessives complicacions. Tan sols executa seqüencialment els mètodes destacats
+de la classe graf i en última instància fa un printf amb els resultats continguts en aquest. Així el programa
+principal no te constància dels resultats parcials, però facilita la estructuració del codi.
+\begin{scriptsize}
+\texttt{\lstinputlisting[columns=fullflexible]{../src/MSTconcurs.cc}}
+\end{scriptsize}
+
+\section{Conclusions}
+Encara que partíem amb el pes d'usar un llenguatge de prou alt nivell com es C++, la tria del compilador i
+l'habilitat a l'hora d'optimitzar el codi han produït un binari acceptable per a resoldre el problema amb
+el que disposàvem. L'ús de les estructures de dades ha sigut intensiu i en moltes ocasions s'han sobrecarregat
+(el cas més destacat es el del mfSet) per contindre informació que transcendeixen les seves utilitats més
+bàsiques.
+
+\end{document}
